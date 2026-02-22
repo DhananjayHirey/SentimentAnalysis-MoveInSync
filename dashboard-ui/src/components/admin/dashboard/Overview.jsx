@@ -18,10 +18,10 @@ import {
     ResponsiveContainer,
     Cell
 } from 'recharts';
-import { Client } from '@stomp/stompjs';
 
 const ANALYTICS_API = 'http://localhost:8081/api/analytics';
 const CRITICAL_THRESHOLD = 2.5;
+const POLL_INTERVAL = 30000; // 30 seconds
 
 const Overview = () => {
     const [drivers, setDrivers] = useState([]);
@@ -74,23 +74,12 @@ const Overview = () => {
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 5000);
-
-        const client = new Client({
-            brokerURL: 'ws://localhost:8081/ws-alerts',
-            onConnect: () => {
-                client.subscribe('/topic/updates', () => {
-                    fetchData();
-                });
-            },
-            reconnectDelay: 5000,
-        });
-
-        client.activate();
+        
+        // Poll analytics data every 30 seconds
+        const interval = setInterval(fetchData, POLL_INTERVAL);
 
         return () => {
             clearInterval(interval);
-            client.deactivate();
         };
     }, []);
 
@@ -104,14 +93,14 @@ const Overview = () => {
         <div className="animate-fade-in">
             {/* Stats Grid */}
             <div className="stats-grid">
-                <div className="card">
+                {/* <div className="card">
                     <div className="stat-header">
                         <span className="stat-label">System Sentiment</span>
                         <Activity size={20} color="#10b981" />
                     </div>
                     <div className="stat-value">{((summary.averageSystemSentiment / 5) * 100).toFixed(1)}%</div>
                     <div className="stat-trend positive">+2.4% from last hour</div>
-                </div>
+                </div> */}
                 <div className="card">
                     <div className="stat-header">
                         <span className="stat-label">Total Feedbacks</span>
