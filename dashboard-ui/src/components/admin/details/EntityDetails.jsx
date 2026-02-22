@@ -46,7 +46,7 @@ const EntityDetails = () => {
 
     const filteredFeedbacks = entityDetails?.feedbacks?.filter(f => {
         if (filter === 'ALL') return true;
-        return getSentimentLabel(f.rating) === filter;
+        return f.sentimentLabel === filter;
     }) || [];
 
     if (loading) return (
@@ -171,11 +171,11 @@ const EntityDetails = () => {
                                                 fontSize: '0.65rem',
                                                 padding: '2px 6px',
                                                 borderRadius: '3px',
-                                                background: getSentimentLabel(f.rating) === 'POSITIVE' ? '#10b98120' : getSentimentLabel(f.rating) === 'NEUTRAL' ? '#f59e0b20' : '#ef444420',
-                                                color: getSentimentLabel(f.rating) === 'POSITIVE' ? '#10b981' : getSentimentLabel(f.rating) === 'NEUTRAL' ? '#f59e0b' : '#ef4444',
+                                                background: f.sentimentLabel === 'POSITIVE' ? '#10b98120' : f.sentimentLabel === 'NEUTRAL' ? '#f59e0b20' : '#ef444420',
+                                                color: f.sentimentLabel === 'POSITIVE' ? '#10b981' : f.sentimentLabel === 'NEUTRAL' ? '#f59e0b' : '#ef4444',
                                                 fontWeight: 600
                                             }}>
-                                                {getSentimentLabel(f.rating)}
+                                                {f.sentimentLabel}
                                             </span>
                                             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                                 {new Date(f.createdAt).toLocaleString()}

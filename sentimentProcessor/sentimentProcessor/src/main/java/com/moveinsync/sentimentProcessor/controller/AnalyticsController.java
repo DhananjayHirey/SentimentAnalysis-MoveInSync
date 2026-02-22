@@ -1,5 +1,8 @@
 package com.moveinsync.sentimentProcessor.controller;
 
+import com.moveinsync.sentimentProcessor.repository.DriverSentimentRepository;
+import com.moveinsync.sentimentProcessor.repository.TripSentimentRepository;
+import com.moveinsync.sentimentProcessor.repository.MarshalSentimentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -7,10 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.CrossOrigin;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @RestController
 @RequiredArgsConstructor
@@ -19,44 +20,69 @@ import java.util.Set;
 public class AnalyticsController {
 
     private final StringRedisTemplate redisTemplate;
+    private final DriverSentimentRepository driverSentimentRepo;
+    private final TripSentimentRepository tripSentimentRepo;
+    private final MarshalSentimentRepository marshalSentimentRepo;
 
+    /**
+     * Returns DB-backed driver sentiment summaries (updated every 30s by
+     * FlushService).
+     */
     @GetMapping("/drivers")
     public List<Map<String, Object>> getDriverSentiment() {
-        Set<String> driverIds = redisTemplate.opsForSet().members("driver:active");
-        if (driverIds == null)
-            return List.of();
-
-        List<Map<String, Object>> results = new ArrayList<>();
-        for (String driverId : driverIds) {
-            String key = "driver:metrics:" + driverId;
-            Map<Object, Object> redisData = redisTemplate.opsForHash().entries(key);
-
-            if (redisData.isEmpty())
-                continue;
-
-            double total = Double.parseDouble(redisData.getOrDefault("total_rating_sum", "0").toString());
-            int count = Integer.parseInt(redisData.getOrDefault("feedback_count", "0").toString());
-            int pos = Integer.parseInt(redisData.getOrDefault("positive_count", "0").toString());
-            int neu = Integer.parseInt(redisData.getOrDefault("neutral_count", "0").toString());
-            int neg = Integer.parseInt(metricsKeySuffix("negative", redisData)); // Helper for clarity
-
-            double avg = count == 0 ? 0.0 : total / count;
-
-            results.add(Map.of(
-                    "driverId", driverId,
-                    "averageScore", avg,
-                    "feedbackCount", count,
-                    "positiveCount", pos,
-                    "neutralCount", neu,
-                    "negativeCount", neg,
-                    "isLive", true));
-        }
-        return results;
+        return driverSentimentRepo.findAll().stream()
+                .map(d -> Map.<String, Object>of(
+                        "driverId", d.getDriverId(),
+                        "averageScore", d.getAverageRating(),
+                        "feedbackCount", d.getFeedbackCount(),
+                        "positiveCount", d.getPositiveCount(),
+                        "neutralCount", d.getNeutralCount(),
+                        "negativeCount", d.getNegativeCount()))
+                .toList();
     }
 
+    /**
+     * Returns DB-backed trip sentiment summaries (updated every 30s by
+     * FlushService).
+     */
+    @GetMapping("/trips")
+    public List<Map<String, Object>> getTripSentiment() {
+        return tripSentimentRepo.findAll().stream()
+                .map(t -> Map.<String, Object>of(
+                        "tripId", t.getTripId(),
+                        "averageScore", t.getAverageRating(),
+                        "feedbackCount", t.getFeedbackCount(),
+                        "positiveCount", t.getPositiveCount(),
+                        "neutralCount", t.getNeutralCount(),
+                        "negativeCount", t.getNegativeCount()))
+                .toList();
+    }
+
+    /**
+     * Returns DB-backed marshal sentiment summaries (updated every 30s by
+     * FlushService).
+     */
+    @GetMapping("/marshals")
+    public List<Map<String, Object>> getMarshalSentiment() {
+        return marshalSentimentRepo.findAll().stream()
+                .map(m -> Map.<String, Object>of(
+                        "marshalId", m.getMarshalId(),
+                        "averageScore", m.getAverageRating(),
+                        "feedbackCount", m.getFeedbackCount(),
+                        "positiveCount", m.getPositiveCount(),
+                        "neutralCount", m.getNeutralCount(),
+                        "negativeCount", m.getNegativeCount()))
+                .toList();
+    }
+
+    /**
+     * Summary endpoint: real-time counters from Redis, but entity counts from DB.
+     */
     @GetMapping("/summary")
     public Map<String, Object> getSummary() {
-        Long totalDrivers = redisTemplate.opsForSet().size("driver:active");
+        long totalDrivers = driverSentimentRepo.count();
+        long totalTrips = tripSentimentRepo.count();
+        long totalMarshals = marshalSentimentRepo.count();
         Long activeAlerts = redisTemplate.opsForSet().size("alerts:active");
         long totalFeedbacks = getLong("analytics:total_feedbacks");
         double totalRatingSum = getDouble("analytics:system_rating_sum");
@@ -64,7 +90,9 @@ public class AnalyticsController {
         double avgSystemSentiment = totalFeedbacks == 0 ? 0.0 : totalRatingSum / totalFeedbacks;
 
         return Map.of(
-                "totalDrivers", totalDrivers != null ? totalDrivers : 0,
+                "totalDrivers", totalDrivers,
+                "totalTrips", totalTrips,
+                "totalMarshals", totalMarshals,
                 "totalFeedbacks", totalFeedbacks,
                 "averageSystemSentiment", avgSystemSentiment,
                 "activeAlerts", activeAlerts != null ? activeAlerts : 0,
@@ -72,10 +100,6 @@ public class AnalyticsController {
                         "positive", getLong("analytics:positive_total"),
                         "neutral", getLong("analytics:neutral_total"),
                         "negative", getLong("analytics:negative_total")));
-    }
-
-    private String metricsKeySuffix(String suffix, Map<Object, Object> data) {
-        return data.getOrDefault(suffix + "_count", "0").toString();
     }
 
     private long getLong(String key) {

@@ -26,8 +26,13 @@ const ANALYTICS_API = 'http://localhost:8081/api/analytics';
 
 const Overview = () => {
     const [drivers, setDrivers] = useState([]);
+    const [trips, setTrips] = useState([]);
+    const [marshals, setMarshals] = useState([]);
+    const [chartTab, setChartTab] = useState('DRIVER');
     const [summary, setSummary] = useState({
         totalDrivers: 0,
+        totalTrips: 0,
+        totalMarshals: 0,
         totalFeedbacks: 0,
         averageSystemSentiment: 0,
         activeAlerts: 0
@@ -36,18 +41,16 @@ const Overview = () => {
 
     const fetchData = async () => {
         try {
-            const [driversRes, summaryRes] = await Promise.all([
+            const [driversRes, tripsRes, marshalsRes, summaryRes] = await Promise.all([
                 fetch(`${ ANALYTICS_API }/drivers`),
+                fetch(`${ ANALYTICS_API }/trips`),
+                fetch(`${ ANALYTICS_API }/marshals`),
                 fetch(`${ ANALYTICS_API }/summary`)
             ]);
-            if (driversRes.ok) {
-                const driversData = await driversRes.json();
-                setDrivers(Array.isArray(driversData) ? driversData : []);
-            }
-            if (summaryRes.ok) {
-                const summaryData = await summaryRes.json();
-                setSummary(summaryData);
-            }
+            if (driversRes.ok) setDrivers(await driversRes.json());
+            if (tripsRes.ok) setTrips(await tripsRes.json());
+            if (marshalsRes.ok) setMarshals(await marshalsRes.json());
+            if (summaryRes.ok) setSummary(await summaryRes.json());
         } catch (error) {
             console.error("Failed to fetch overview data", error);
         }
@@ -107,11 +110,11 @@ const Overview = () => {
                 </div>
                 <div className="card">
                     <div className="stat-header">
-                        <span className="stat-label">Active Drivers</span>
+                        <span className="stat-label">Entities Tracked</span>
                         <Users size={20} color="#8b5cf6" />
                     </div>
-                    <div className="stat-value">{summary.totalDrivers}</div>
-                    <div className="stat-trend">Current active sessions</div>
+                    <div className="stat-value">{summary.totalDrivers + (summary.totalTrips || 0) + (summary.totalMarshals || 0)}</div>
+                    <div className="stat-trend">{summary.totalDrivers}D · {summary.totalTrips || 0}T · {summary.totalMarshals || 0}M</div>
                 </div>
                 <div className="card">
                     <div className="stat-header">
@@ -151,46 +154,65 @@ const Overview = () => {
 
                 {/* Chart Section */}
                 <div className="card">
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem' }}>Driver Sentiment Overview</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Sentiment Overview</h3>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {['DRIVER', 'TRIP', 'MARSHAL'].map(t => (
+                                <button
+                                    key={t}
+                                    className={`pill-button ${ chartTab === t ? 'active' : '' }`}
+                                    onClick={() => setChartTab(t)}
+                                    style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <div style={{ height: '300px', width: '100%', minWidth: 0 }}>
-                        {drivers.length === 0 ? (
-                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                                No active driver data
-                            </div>
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={drivers}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                                    <XAxis
-                                        dataKey="driverId"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                                    />
-                                    <YAxis
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                                        domain={[0, 5]}
-                                    />
-                                    <RechartsTooltip
-                                        cursor={{ fill: 'var(--glass)' }}
-                                        contentStyle={{
-                                            background: 'var(--bg-card)',
-                                            border: '1px solid var(--border)',
-                                            borderRadius: '8px',
-                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                                        }}
-                                        formatter={(value) => [Number(value).toFixed(2), "Sentiment Rating"]}
-                                    />
-                                    <Bar dataKey="averageScore" radius={[4, 4, 0, 0]}>
-                                        {drivers.map((entry, index) => (
-                                            <Cell key={`cell-${ index }`} fill={getSentimentColor(entry.averageScore)} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        )}
+                        {(() => {
+                            const data = chartTab === 'DRIVER' ? drivers : chartTab === 'TRIP' ? trips : marshals;
+                            const idKey = chartTab === 'DRIVER' ? 'driverId' : chartTab === 'TRIP' ? 'tripId' : 'marshalId';
+                            if (data.length === 0) return (
+                                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                                    No {chartTab.toLowerCase()} data in database yet
+                                </div>
+                            );
+                            return (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={data}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                                        <XAxis
+                                            dataKey={idKey}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                                        />
+                                        <YAxis
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                                            domain={[0, 5]}
+                                        />
+                                        <RechartsTooltip
+                                            cursor={{ fill: 'var(--glass)' }}
+                                            contentStyle={{
+                                                background: 'var(--bg-card)',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '8px',
+                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                            }}
+                                            formatter={(value) => [Number(value).toFixed(2), "Avg Rating"]}
+                                        />
+                                        <Bar dataKey="averageScore" radius={[4, 4, 0, 0]}>
+                                            {data.map((entry, index) => (
+                                                <Cell key={`cell-${ index }`} fill={getSentimentColor(entry.averageScore)} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>
