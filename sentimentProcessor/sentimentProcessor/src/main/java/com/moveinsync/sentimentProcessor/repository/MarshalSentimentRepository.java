@@ -1,6 +1,6 @@
 package com.moveinsync.sentimentProcessor.repository;
 
-import com.moveinsync.sentimentProcessor.entity.DriverSentiment;
+import com.moveinsync.sentimentProcessor.entity.MarshalSentiment;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -9,16 +9,16 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface DriverSentimentRepository
-        extends JpaRepository<DriverSentiment, String> {
+public interface MarshalSentimentRepository
+        extends JpaRepository<MarshalSentiment, String> {
 
     @Modifying
     @Transactional
     @Query(value = """
-            INSERT INTO driver_sentiment
-            (driver_id, total_rating_sum, feedback_count, average_rating, positive_count, neutral_count, negative_count, updated_at)
-            VALUES (:driverId, :totalSum, :count, :avg, :pos, :neu, :neg, NOW())
-            ON CONFLICT (driver_id)
+            INSERT INTO marshal_sentiment
+            (marshal_id, total_rating_sum, feedback_count, average_rating, positive_count, neutral_count, negative_count, updated_at)
+            VALUES (:marshalId, :totalSum, :count, :avg, :pos, :neu, :neg, NOW())
+            ON CONFLICT (marshal_id)
             DO UPDATE SET
                 total_rating_sum = :totalSum,
                 feedback_count = :count,
@@ -29,7 +29,7 @@ public interface DriverSentimentRepository
                 updated_at = NOW()
             """, nativeQuery = true)
     void upsert(
-            @Param("driverId") String driverId,
+            @Param("marshalId") String marshalId,
             @Param("totalSum") double totalSum,
             @Param("count") int count,
             @Param("avg") double avg,

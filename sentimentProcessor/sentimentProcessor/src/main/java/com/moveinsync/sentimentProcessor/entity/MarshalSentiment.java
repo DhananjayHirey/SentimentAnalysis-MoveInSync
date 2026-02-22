@@ -7,11 +7,11 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "driver_sentiment")
-public class DriverSentiment {
+@Table(name = "marshal_sentiment")
+public class MarshalSentiment {
     @Id
-    @Column(name = "driver_id")
-    private String driverId;
+    @Column(name = "marshal_id")
+    private String marshalId;
 
     @Column(name = "total_rating_sum", nullable = false)
     private double totalRatingSum;
@@ -34,15 +34,15 @@ public class DriverSentiment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public DriverSentiment() {
+    public MarshalSentiment() {
     }
 
-    public String getDriverId() {
-        return driverId;
+    public String getMarshalId() {
+        return marshalId;
     }
 
-    public void setDriverId(String driverId) {
-        this.driverId = driverId;
+    public void setMarshalId(String marshalId) {
+        this.marshalId = marshalId;
     }
 
     public double getTotalRatingSum() {

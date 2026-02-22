@@ -22,51 +22,60 @@ public class AnalyticsController {
 
     @GetMapping("/drivers")
     public List<Map<String, Object>> getDriverSentiment() {
-
         Set<String> driverIds = redisTemplate.opsForSet().members("driver:active");
-
         if (driverIds == null)
             return List.of();
 
         List<Map<String, Object>> results = new ArrayList<>();
-
         for (String driverId : driverIds) {
-
-            String key = "driver:sentiment:" + driverId;
+            String key = "driver:metrics:" + driverId;
             Map<Object, Object> redisData = redisTemplate.opsForHash().entries(key);
 
             if (redisData.isEmpty())
                 continue;
 
-            double total = Double.parseDouble(redisData.get("total_score").toString());
-            int count = Integer.parseInt(redisData.get("feedback_count").toString());
-            double avg = total / count;
+            double total = Double.parseDouble(redisData.getOrDefault("total_rating_sum", "0").toString());
+            int count = Integer.parseInt(redisData.getOrDefault("feedback_count", "0").toString());
+            int pos = Integer.parseInt(redisData.getOrDefault("positive_count", "0").toString());
+            int neu = Integer.parseInt(redisData.getOrDefault("neutral_count", "0").toString());
+            int neg = Integer.parseInt(metricsKeySuffix("negative", redisData)); // Helper for clarity
+
+            double avg = count == 0 ? 0.0 : total / count;
 
             results.add(Map.of(
                     "driverId", driverId,
                     "averageScore", avg,
                     "feedbackCount", count,
+                    "positiveCount", pos,
+                    "neutralCount", neu,
+                    "negativeCount", neg,
                     "isLive", true));
         }
-
         return results;
     }
 
     @GetMapping("/summary")
     public Map<String, Object> getSummary() {
-
         Long totalDrivers = redisTemplate.opsForSet().size("driver:active");
         Long activeAlerts = redisTemplate.opsForSet().size("alerts:active");
         long totalFeedbacks = getLong("analytics:total_feedbacks");
-        double totalScore = getDouble("analytics:system_total_score");
+        double totalRatingSum = getDouble("analytics:system_rating_sum");
 
-        double avgSystemSentiment = totalFeedbacks == 0 ? 0.0 : totalScore / totalFeedbacks;
+        double avgSystemSentiment = totalFeedbacks == 0 ? 0.0 : totalRatingSum / totalFeedbacks;
 
         return Map.of(
-                "totalDrivers", totalDrivers,
+                "totalDrivers", totalDrivers != null ? totalDrivers : 0,
                 "totalFeedbacks", totalFeedbacks,
                 "averageSystemSentiment", avgSystemSentiment,
-                "activeAlerts", activeAlerts);
+                "activeAlerts", activeAlerts != null ? activeAlerts : 0,
+                "sentimentBreakdown", Map.of(
+                        "positive", getLong("analytics:positive_total"),
+                        "neutral", getLong("analytics:neutral_total"),
+                        "negative", getLong("analytics:negative_total")));
+    }
+
+    private String metricsKeySuffix(String suffix, Map<Object, Object> data) {
+        return data.getOrDefault(suffix + "_count", "0").toString();
     }
 
     private long getLong(String key) {

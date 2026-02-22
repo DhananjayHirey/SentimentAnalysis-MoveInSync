@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { User, MapPin, Smartphone, Info, ChevronRight, Activity } from 'lucide-react';
 
-const FEEDBACK_API = 'http://localhost:8080/api/feedback';
+const ADMIN_API = 'http://localhost:8081/api/feedback/admin';
 
 const EntityDetails = () => {
     const { type, id } = useParams();
     const navigate = useNavigate();
     const [entityDetails, setEntityDetails] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('ALL');
 
     const fetchEntityDetails = async (type, id) => {
         try {
             setLoading(true);
-            const res = await fetch(`${ FEEDBACK_API }/admin/details/${ type }/${ id }`);
+            const res = await fetch(`${ ADMIN_API }/details/${ type }/${ id }`);
             if (res.ok) {
                 const data = await res.json();
                 setEntityDetails(data);
@@ -37,6 +38,17 @@ const EntityDetails = () => {
         return '#ef4444';
     };
 
+    const getSentimentLabel = (rating) => {
+        if (rating >= 4) return 'POSITIVE';
+        if (rating === 3) return 'NEUTRAL';
+        return 'NEGATIVE';
+    };
+
+    const filteredFeedbacks = entityDetails?.feedbacks?.filter(f => {
+        if (filter === 'ALL') return true;
+        return getSentimentLabel(f.rating) === filter;
+    }) || [];
+
     if (loading) return (
         <div className="card animate-pulse" style={{ textAlign: 'center', padding: '4rem' }}>
             <Activity className="animate-spin" style={{ margin: '0 auto 1rem' }} />
@@ -58,7 +70,21 @@ const EntityDetails = () => {
                 <button onClick={() => navigate(-1)} className="text-button" style={{ marginBottom: '1rem' }}>
                     ← Back
                 </button>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>{type} Details: {id}</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>{type} Details: {id}</h2>
+                    <div className="glass-panel" style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                        {['ALL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE'].map(f => (
+                            <button
+                                key={f}
+                                className={`pill-button ${ filter === f ? 'active' : '' }`}
+                                onClick={() => setFilter(f)}
+                                style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                            >
+                                {f}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem' }}>
@@ -93,15 +119,32 @@ const EntityDetails = () => {
                             ))}
                         </div>
                     </div>
+
+                    <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                        <div className="sentiment-stat positive">
+                            <span>Pos</span>
+                            <strong>{entityDetails.positiveCount || 0}</strong>
+                        </div>
+                        <div className="sentiment-stat neutral">
+                            <span>Neu</span>
+                            <strong>{entityDetails.neutralCount || 0}</strong>
+                        </div>
+                        <div className="sentiment-stat negative">
+                            <span>Neg</span>
+                            <strong>{entityDetails.negativeCount || 0}</strong>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="card">
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem' }}>Recent Feedback History</h3>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem' }}>
+                        {filter !== 'ALL' ? `${ filter } ` : ''}Feedback History ({filteredFeedbacks.length})
+                    </h3>
                     <div className="feedback-list">
-                        {entityDetails.feedbacks?.length === 0 ? (
-                            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No feedback history available</p>
+                        {filteredFeedbacks.length === 0 ? (
+                            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No {filter.toLowerCase()} feedback found</p>
                         ) : (
-                            entityDetails.feedbacks?.map((f, i) => (
+                            filteredFeedbacks.map((f, i) => (
                                 <div key={i} className="feedback-item" style={{
                                     padding: '1rem',
                                     borderBottom: '1px solid var(--border)',
@@ -121,11 +164,23 @@ const EntityDetails = () => {
                                     }}>
                                         {f.rating}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1 }}>
                                         <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>"{f.comment}"</p>
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                            {new Date(f.createdAt).toLocaleString()}
-                                        </p>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                padding: '2px 6px',
+                                                borderRadius: '3px',
+                                                background: getSentimentLabel(f.rating) === 'POSITIVE' ? '#10b98120' : getSentimentLabel(f.rating) === 'NEUTRAL' ? '#f59e0b20' : '#ef444420',
+                                                color: getSentimentLabel(f.rating) === 'POSITIVE' ? '#10b981' : getSentimentLabel(f.rating) === 'NEUTRAL' ? '#f59e0b' : '#ef4444',
+                                                fontWeight: 600
+                                            }}>
+                                                {getSentimentLabel(f.rating)}
+                                            </span>
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                {new Date(f.createdAt).toLocaleString()}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             ))

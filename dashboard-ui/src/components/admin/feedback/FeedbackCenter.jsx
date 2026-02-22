@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Info } from 'lucide-react';
 
-const FEEDBACK_API = 'http://localhost:8080/api/feedback';
+const ADMIN_API = 'http://localhost:8081/api/feedback/admin';
 
 const FeedbackCenter = () => {
     const [feedbackType, setFeedbackType] = useState('DRIVER');
@@ -12,7 +12,7 @@ const FeedbackCenter = () => {
 
     const fetchFeedbacks = async (type) => {
         try {
-            const res = await fetch(`${ FEEDBACK_API }/admin/feedbacks/${ type }`);
+            const res = await fetch(`${ ADMIN_API }/feedbacks/${ type }`);
             if (res.ok) {
                 const data = await res.json();
                 setFeedbackList(Array.isArray(data) ? data : []);
@@ -24,7 +24,7 @@ const FeedbackCenter = () => {
 
     const fetchAverages = async (type) => {
         try {
-            const res = await fetch(`${ FEEDBACK_API }/admin/averages/${ type }`);
+            const res = await fetch(`${ ADMIN_API }/averages/${ type }`);
             if (res.ok) {
                 const data = await res.json();
                 setAverages(Array.isArray(data) ? data : [data]);
@@ -69,9 +69,18 @@ const FeedbackCenter = () => {
                         {feedbackType === 'APP' ? (
                             <div className="glass-panel" style={{ padding: '1.5rem', textAlign: 'center' }}>
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Overall App Rating</p>
-                                <p style={{ fontSize: '2rem', fontWeight: 700, color: getRatingColor(averages[0]?.average) }}>
-                                    {(averages[0]?.average || 0).toFixed(2)}
-                                </p>
+                                {averages[0]?.count === 0 || !averages[0] ? (
+                                    <p style={{ color: 'var(--text-muted)', marginTop: '0.75rem' }}>No app feedbacks yet</p>
+                                ) : (
+                                    <>
+                                        <p style={{ fontSize: '2rem', fontWeight: 700, color: getRatingColor(averages[0]?.average) }}>
+                                            {(averages[0]?.average || 0).toFixed(2)}
+                                        </p>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                            Based on {averages[0]?.count} feedback{averages[0]?.count !== 1 ? 's' : ''}
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             averages.slice(0, 5).map((a, i) => (

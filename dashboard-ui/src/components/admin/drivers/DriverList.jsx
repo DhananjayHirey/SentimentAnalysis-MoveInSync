@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
-const FEEDBACK_API = 'http://localhost:8080/api/feedback';
+const ADMIN_API = 'http://localhost:8081/api/feedback/admin';
 
 const DriverList = () => {
     const [dbDriverRatings, setDbDriverRatings] = useState([]);
@@ -10,7 +10,7 @@ const DriverList = () => {
 
     const fetchDbDriverRatings = async () => {
         try {
-            const res = await fetch(`${ FEEDBACK_API }/drivers/ratings`);
+            const res = await fetch(`${ ADMIN_API }/averages/DRIVER`);
             if (res.ok) {
                 const data = await res.json();
                 setDbDriverRatings(Array.isArray(data) ? data : []);
@@ -52,16 +52,16 @@ const DriverList = () => {
                         <tbody>
                             {dbDriverRatings.map((r, i) => (
                                 <tr key={i}>
-                                    <td style={{ fontWeight: 600 }}>{r.driverId}</td>
+                                    <td style={{ fontWeight: 600 }}>{r.id}</td>
                                     <td>
                                         <span style={{
                                             fontWeight: 700,
-                                            color: getRatingColor(r.averageRating),
-                                            background: `${ getRatingColor(r.averageRating) }15`,
+                                            color: getRatingColor(r.average),
+                                            background: `${ getRatingColor(r.average) }15`,
                                             padding: '2px 8px',
                                             borderRadius: '4px'
                                         }}>
-                                            {(r.averageRating || 0).toFixed(2)}
+                                            {(r.average || 0).toFixed(2)}
                                         </span>
                                     </td>
                                     <td style={{ width: '40%' }}>
@@ -69,8 +69,8 @@ const DriverList = () => {
                                             <div
                                                 className="progress-bar-fill"
                                                 style={{
-                                                    width: `${ ((r.averageRating || 0) / 5) * 100 }%`,
-                                                    background: getRatingColor(r.averageRating)
+                                                    width: `${ ((r.average || 0) / 5) * 100 }%`,
+                                                    background: getRatingColor(r.average)
                                                 }}
                                             ></div>
                                         </div>
@@ -78,7 +78,7 @@ const DriverList = () => {
                                     <td style={{ textAlign: 'right' }}>
                                         <button
                                             className="text-button"
-                                            onClick={() => navigate(`/admin/details/DRIVER/${ r.driverId }`)}
+                                            onClick={() => navigate(`/admin/details/DRIVER/${ r.id }`)}
                                         >
                                             View Details
                                             <ChevronRight size={16} />

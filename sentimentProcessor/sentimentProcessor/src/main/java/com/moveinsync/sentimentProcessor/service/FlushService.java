@@ -2,14 +2,17 @@ package com.moveinsync.sentimentProcessor.service;
 
 import com.moveinsync.sentimentProcessor.event.DriverAlertEvent;
 import com.moveinsync.sentimentProcessor.repository.DriverSentimentRepository;
+import com.moveinsync.sentimentProcessor.repository.MarshalSentimentRepository;
+import com.moveinsync.sentimentProcessor.repository.TripSentimentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -17,91 +20,129 @@ import java.util.Set;
 public class FlushService {
 
     private final StringRedisTemplate redisTemplate;
-    private final DriverSentimentRepository repository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final DriverSentimentRepository driverRepository;
+    private final TripSentimentRepository tripRepository;
+    private final MarshalSentimentRepository marshalRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Scheduled(fixedRate = 30000)
+    @Value("${alert.threshold:2.5}")
+    private double alertThreshold;
+
+    @Value("${alert.minFeedback:1}")
+    private int minFeedback;
+
+    @Scheduled(fixedDelay = 30000)
     public void flush() {
+        flushDrivers();
+        flushTrips();
+        flushMarshals();
+    }
 
+    private void flushDrivers() {
         Set<String> dirtyDrivers = redisTemplate.opsForSet().members("driver:dirty");
-
-        if (dirtyDrivers == null)
+        if (dirtyDrivers == null || dirtyDrivers.isEmpty())
             return;
 
-        for (Object driverIdObj : dirtyDrivers) {
-
-            String driverId = driverIdObj.toString();
-            String key = "driver:sentiment:" + driverId;
-
-            Object totalObj = redisTemplate.opsForHash()
-                    .get(key, "total_score");
-
-            Object countObj = redisTemplate.opsForHash()
-                    .get(key, "feedback_count");
-
-            if (totalObj == null || countObj == null)
+        for (String driverId : dirtyDrivers) {
+            Map<Object, Object> metrics = redisTemplate.opsForHash().entries("driver:metrics:" + driverId);
+            if (metrics.isEmpty())
                 continue;
 
-            double total = Double.parseDouble(totalObj.toString());
-            int count = Integer.parseInt(countObj.toString());
+            double totalSum = Double.parseDouble(metrics.getOrDefault("total_rating_sum", "0").toString());
+            int count = Integer.parseInt(metrics.getOrDefault("feedback_count", "0").toString());
+            int pos = Integer.parseInt(metrics.getOrDefault("positive_count", "0").toString());
+            int neu = Integer.parseInt(metrics.getOrDefault("neutral_count", "0").toString());
+            int neg = Integer.parseInt(metrics.getOrDefault("negative_count", "0").toString());
 
-            double avg = total / count;
+            if (count == 0)
+                continue;
+            double avg = totalSum / count;
 
-
-
-            // 1️⃣ Upsert to DB
-            repository.upsert(driverId, total, count, avg);
-
-            // 2️⃣ Alert logic here
+            driverRepository.upsert(driverId, totalSum, count, avg, pos, neu, neg);
             handleAlert(driverId, avg, count);
         }
-
         redisTemplate.delete("driver:dirty");
     }
 
-    private void handleAlert(String driverId, double avg, int count) {
+    private void flushTrips() {
+        Set<String> dirtyTrips = redisTemplate.opsForSet().members("trip:dirty");
+        if (dirtyTrips == null || dirtyTrips.isEmpty())
+            return;
 
-        String alertKey = "driver:alerted:" + driverId;
-        Boolean alreadyAlerted = redisTemplate.hasKey(alertKey);
+        for (String tripId : dirtyTrips) {
+            Map<Object, Object> metrics = redisTemplate.opsForHash().entries("trip:metrics:" + tripId);
+            if (metrics.isEmpty())
+                continue;
 
-        if (avg < 2.5 && !Boolean.TRUE.equals(alreadyAlerted)) {
+            double totalSum = Double.parseDouble(metrics.getOrDefault("total_rating_sum", "0").toString());
+            int count = Integer.parseInt(metrics.getOrDefault("feedback_count", "0").toString());
+            int pos = Integer.parseInt(metrics.getOrDefault("positive_count", "0").toString());
+            int neu = Integer.parseInt(metrics.getOrDefault("neutral_count", "0").toString());
+            int neg = Integer.parseInt(metrics.getOrDefault("negative_count", "0").toString());
 
-            DriverAlertEvent alertEvent = DriverAlertEvent.builder()
-                    .driverId(driverId)
-                    .averageScore(avg)
-                    .feedbackCount(count)
-                    .triggeredAt(LocalDateTime.now())
-                    .alertType("LOW_RATING")
-                    .build();
-
-            kafkaTemplate.send("driver-alert-events", driverId, alertEvent);
-            messagingTemplate.convertAndSend("/topic/alerts", alertEvent);
-
-            redisTemplate.opsForValue().set(alertKey, "true");
-//            redisTemplate.opsForValue().increment("analytics:active_alerts", 1);
-            redisTemplate.opsForSet().add("alerts:active", driverId);
+            if (count == 0)
+                continue;
+            tripRepository.upsert(tripId, totalSum, count, avg(totalSum, count), pos, neu, neg);
         }
+        redisTemplate.delete("trip:dirty");
+    }
 
-        // Optional: recovery alert
-        if (avg >= 2.5 && Boolean.TRUE.equals(alreadyAlerted)) {
+    private void flushMarshals() {
+        Set<String> dirtyMarshals = redisTemplate.opsForSet().members("marshal:dirty");
+        if (dirtyMarshals == null || dirtyMarshals.isEmpty())
+            return;
 
-            DriverAlertEvent recoveryEvent = DriverAlertEvent.builder()
-                    .driverId(driverId)
-                    .averageScore(avg)
-                    .feedbackCount(count)
-                    .triggeredAt(LocalDateTime.now())
-                    .alertType("RECOVERED")
-                    .build();
+        for (String marshalId : dirtyMarshals) {
+            Map<Object, Object> metrics = redisTemplate.opsForHash().entries("marshal:metrics:" + marshalId);
+            if (metrics.isEmpty())
+                continue;
 
-            kafkaTemplate.send("driver-alert-events", driverId, recoveryEvent);
-            messagingTemplate.convertAndSend("/topic/alerts", recoveryEvent);
+            double totalSum = Double.parseDouble(metrics.getOrDefault("total_rating_sum", "0").toString());
+            int count = Integer.parseInt(metrics.getOrDefault("feedback_count", "0").toString());
+            int pos = Integer.parseInt(metrics.getOrDefault("positive_count", "0").toString());
+            int neu = Integer.parseInt(metrics.getOrDefault("neutral_count", "0").toString());
+            int neg = Integer.parseInt(metrics.getOrDefault("negative_count", "0").toString());
 
-            redisTemplate.delete(alertKey);
-//            redisTemplate.opsForValue().increment("analytics:active_alerts", -1);
-            redisTemplate.opsForSet().remove("alerts:active", driverId);
+            if (count == 0)
+                continue;
+            marshalRepository.upsert(marshalId, totalSum, count, avg(totalSum, count), pos, neu, neg);
+        }
+        redisTemplate.delete("marshal:dirty");
+    }
+
+    private double avg(double sum, int count) {
+        return count == 0 ? 0.0 : sum / count;
+    }
+
+    private void handleAlert(String driverId, double avg, int count) {
+        String alertStateKey = "driver:alerted:" + driverId;
+        boolean currentlyAlerted = Boolean.TRUE.equals(redisTemplate.hasKey(alertStateKey));
+
+        if (avg < alertThreshold && count >= minFeedback) {
+            if (!currentlyAlerted) {
+                sendAlert(driverId, avg, count, "LOW_RATING");
+                redisTemplate.opsForValue().set(alertStateKey, "true");
+                redisTemplate.opsForSet().add("alerts:active", driverId);
+            }
+        } else {
+            if (currentlyAlerted) {
+                sendAlert(driverId, avg, count, "RECOVERED");
+                redisTemplate.delete(alertStateKey);
+                redisTemplate.opsForSet().remove("alerts:active", driverId);
+            }
         }
     }
 
+    private void sendAlert(String driverId, double avg, int count, String type) {
+        DriverAlertEvent alertEvent = DriverAlertEvent.builder()
+                .driverId(driverId)
+                .averageScore(avg)
+                .feedbackCount(count)
+                .triggeredAt(LocalDateTime.now())
+                .alertType(type)
+                .build();
 
+        messagingTemplate.convertAndSend("/topic/alerts", alertEvent);
+        System.out.println("Alert " + type + " sent for driver: " + driverId);
+    }
 }

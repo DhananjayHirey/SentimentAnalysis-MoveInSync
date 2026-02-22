@@ -64,6 +64,9 @@ const Overview = () => {
                     const alert = JSON.parse(message.body);
                     setAlerts(prev => [alert, ...prev].slice(0, 5));
                 });
+                client.subscribe('/topic/updates', () => {
+                    fetchData();
+                });
             },
             reconnectDelay: 5000,
         });
@@ -149,7 +152,7 @@ const Overview = () => {
                 {/* Chart Section */}
                 <div className="card">
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem' }}>Driver Sentiment Overview</h3>
-                    <div style={{ height: '300px', width: '100%' }}>
+                    <div style={{ height: '300px', width: '100%', minWidth: 0 }}>
                         {drivers.length === 0 ? (
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
                                 No active driver data
