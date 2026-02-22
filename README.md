@@ -1021,43 +1021,6 @@ spring.jpa.hibernate.ddl-auto=update  # Auto-create tables on startup
 spring.jpa.properties.hibernate.dialect=PostgreSQLDialect
 ```
 
----
-
-## 📊 Performance Characteristics
-
-### Throughput & Latency
-
-| Metric              | Target      | Actual\*                    |
-| ------------------- | ----------- | --------------------------- |
-| Feedback submission | < 10ms      | 2-5ms                       |
-| Sentiment analysis  | < 50ms      | 1-3ms                       |
-| Metrics update      | < 100ms     | 5-10ms                      |
-| Dashboard query     | < 500ms     | 50-200ms                    |
-| Alert propagation   | < 1s        | 100-300ms                   |
-| System throughput   | 100 req/min | ~1000 req/min (3 instances) |
-
-\*Measured on Docker with 4 CPU cores, 8GB RAM
-
-### Scalability
-
-**Vertical Scaling (Single Machine):**
-
-- Single Sentiment Processor instance: ~300 req/min
-- Bottleneck: CPU (sentiment analysis is I/O-free)
-
-**Horizontal Scaling (Multiple Machines):**
-
-- 3 Sentiment Processor instances: ~900 req/min
-- Kafka partitioning ensures ordering per entity ID
-
-**Storage:**
-
-- PostgreSQL: ~50 bytes per feedback row
-- 1M feedbacks = 50 MB + indexes
-- Redis metrics: ~1 KB per entity, auto-expires after 30 days
-
----
-
 ## 🚀 Future Enhancements
 
 ### Short-Term (1-2 months)
@@ -1159,15 +1122,7 @@ docker build -f Dockerfile.dashboard -t moveinsync/dashboard:latest .
 docker stack deploy -c docker-compose.prod.yml moveinSync
 ```
 
-### Production
 
-- **Container Orchestration:** Kubernetes (EKS, AKS, GKE)
-- **Load Balancing:** Nginx or cloud provider ALB/NLB
-- **Database:** Managed PostgreSQL (RDS, Azure Database)
-- **Cache:** Managed Redis (ElastiCache, Azure Cache)
-- **Message Queue:** Managed Kafka (MSK, Confluent Cloud)
-- **Monitoring:** Prometheus + Grafana + ELK
-- **Auto-scaling:** Based on Kafka lag metrics
 
 ---
 
@@ -1181,19 +1136,11 @@ docker stack deploy -c docker-compose.prod.yml moveinSync
 
 ---
 
-## 📝 License
-
-This project is proprietary to MoveInSync. All rights reserved.
-
----
-
 ## 📞 Support & Contact
 
 For issues, questions, or feature requests:
 
-- **Slack:** #sentiment-engine
-- **Email:** sentiment-team@moveinsync.com
-- **Wiki:** https://wiki.moveinsync.com/sentiment-engine
+- **Email:** dhananjayhirey2905@gmail.com
 
 ---
 
