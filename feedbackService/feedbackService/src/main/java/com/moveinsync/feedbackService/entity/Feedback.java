@@ -4,6 +4,8 @@ package com.moveinsync.feedbackService.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import java.time.LocalDateTime;
 
 @Entity
