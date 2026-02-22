@@ -26,7 +26,7 @@ const DriverList = () => {
 
     const getRatingColor = (rating) => {
         if (rating >= 4.0) return '#10b981';
-        if (rating >= 3.0) return '#f59e0b';
+        if (rating >= 2.5) return '#f59e0b';
         return '#ef4444';
     };
 

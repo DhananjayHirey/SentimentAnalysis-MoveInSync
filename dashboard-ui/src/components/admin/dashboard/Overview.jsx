@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Users,
     Activity,
     AlertTriangle,
     MessageSquare,
-    ChevronRight,
     User,
     MapPin,
     Smartphone,
-    Info
 } from 'lucide-react';
 import {
     BarChart,
@@ -23,6 +21,7 @@ import {
 import { Client } from '@stomp/stompjs';
 
 const ANALYTICS_API = 'http://localhost:8081/api/analytics';
+const CRITICAL_THRESHOLD = 2.5;
 
 const Overview = () => {
     const [drivers, setDrivers] = useState([]);
@@ -37,7 +36,6 @@ const Overview = () => {
         averageSystemSentiment: 0,
         activeAlerts: 0
     });
-    const [alerts, setAlerts] = useState([]);
 
     const fetchData = async () => {
         try {
@@ -56,6 +54,24 @@ const Overview = () => {
         }
     };
 
+    // Derive alerts from chart data — only non-recovered entities (score < threshold)
+    const alerts = useMemo(() => {
+        const criticalDrivers = drivers
+            .filter(d => d.averageScore < CRITICAL_THRESHOLD)
+            .map(d => ({ type: 'Driver', id: d.driverId, score: d.averageScore }));
+
+        const criticalTrips = trips
+            .filter(t => t.averageScore < CRITICAL_THRESHOLD)
+            .map(t => ({ type: 'Trip', id: t.tripId, score: t.averageScore }));
+
+        const criticalMarshals = marshals
+            .filter(m => m.averageScore < CRITICAL_THRESHOLD)
+            .map(m => ({ type: 'Marshal', id: m.marshalId, score: m.averageScore }));
+
+        return [...criticalDrivers, ...criticalTrips, ...criticalMarshals]
+            .sort((a, b) => a.score - b.score); // worst first
+    }, [drivers, trips, marshals]);
+
     useEffect(() => {
         fetchData();
         const interval = setInterval(fetchData, 5000);
@@ -63,10 +79,6 @@ const Overview = () => {
         const client = new Client({
             brokerURL: 'ws://localhost:8081/ws-alerts',
             onConnect: () => {
-                client.subscribe('/topic/alerts', (message) => {
-                    const alert = JSON.parse(message.body);
-                    setAlerts(prev => [alert, ...prev].slice(0, 5));
-                });
                 client.subscribe('/topic/updates', () => {
                     fetchData();
                 });
@@ -121,8 +133,8 @@ const Overview = () => {
                         <span className="stat-label">Critical Alerts</span>
                         <AlertTriangle size={20} color="#ef4444" />
                     </div>
-                    <div className="stat-value">{summary.activeAlerts}</div>
-                    <div className="stat-trend negative">Requires attention</div>
+                    <div className="stat-value">{alerts.length}</div>
+                    <div className="stat-trend negative">{alerts.length > 0 ? 'Requires attention' : 'All clear'}</div>
                 </div>
             </div>
 
@@ -137,17 +149,27 @@ const Overview = () => {
                         {alerts.length === 0 ? (
                             <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No active alerts</p>
                         ) : (
-                            alerts.map((alert, i) => (
-                                <div key={i} className="alert-item bounce-in">
-                                    <div className="alert-icon">
-                                        <AlertTriangle size={18} color="#ef4444" />
+                            alerts.map((alert, i) => {
+                                const icon = alert.type === 'Driver'
+                                    ? <User size={18} color="#ef4444" />
+                                    : alert.type === 'Trip'
+                                        ? <MapPin size={18} color="#ef4444" />
+                                        : <Smartphone size={18} color="#ef4444" />;
+                                return (
+                                    <div key={`${ alert.type }-${ alert.id }`} className="alert-item bounce-in">
+                                        <div className="alert-icon">{icon}</div>
+                                        <div className="alert-content">
+                                            <div className="alert-title">
+                                                {alert.type} #{alert.id}
+                                            </div>
+                                            <div className="alert-desc">
+                                                Avg score: <strong style={{ color: '#ef4444' }}>{Number(alert.score).toFixed(2)}</strong>
+                                                &nbsp;— Low sentiment detected
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="alert-content">
-                                        <div className="alert-title">Critical Sentiment: {alert.driverId}</div>
-                                        <div className="alert-desc">{alert.message}</div>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
