@@ -3,9 +3,9 @@ package com.moveinsync.sentimentProcessor.service;
 import com.moveinsync.sentimentProcessor.event.DriverAlertEvent;
 import com.moveinsync.sentimentProcessor.repository.DriverSentimentRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -19,14 +19,15 @@ public class FlushService {
     private final StringRedisTemplate redisTemplate;
     private final DriverSentimentRepository repository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Scheduled(fixedRate = 30000)
     public void flush() {
 
-        Set<String> dirtyDrivers =
-                redisTemplate.opsForSet().members("driver:dirty");
+        Set<String> dirtyDrivers = redisTemplate.opsForSet().members("driver:dirty");
 
-        if (dirtyDrivers == null) return;
+        if (dirtyDrivers == null)
+            return;
 
         for (Object driverIdObj : dirtyDrivers) {
 
@@ -39,12 +40,15 @@ public class FlushService {
             Object countObj = redisTemplate.opsForHash()
                     .get(key, "feedback_count");
 
-            if (totalObj == null || countObj == null) continue;
+            if (totalObj == null || countObj == null)
+                continue;
 
             double total = Double.parseDouble(totalObj.toString());
             int count = Integer.parseInt(countObj.toString());
 
             double avg = total / count;
+
+
 
             // 1️⃣ Upsert to DB
             repository.upsert(driverId, total, count, avg);
@@ -72,8 +76,11 @@ public class FlushService {
                     .build();
 
             kafkaTemplate.send("driver-alert-events", driverId, alertEvent);
+            messagingTemplate.convertAndSend("/topic/alerts", alertEvent);
 
             redisTemplate.opsForValue().set(alertKey, "true");
+//            redisTemplate.opsForValue().increment("analytics:active_alerts", 1);
+            redisTemplate.opsForSet().add("alerts:active", driverId);
         }
 
         // Optional: recovery alert
@@ -88,8 +95,13 @@ public class FlushService {
                     .build();
 
             kafkaTemplate.send("driver-alert-events", driverId, recoveryEvent);
+            messagingTemplate.convertAndSend("/topic/alerts", recoveryEvent);
 
             redisTemplate.delete(alertKey);
+//            redisTemplate.opsForValue().increment("analytics:active_alerts", -1);
+            redisTemplate.opsForSet().remove("alerts:active", driverId);
         }
     }
+
+
 }
