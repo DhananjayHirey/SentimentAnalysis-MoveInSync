@@ -51,8 +51,5 @@ public class FeedbackController {
         return ResponseEntity.ok("Feedback submitted successfully");
     }
 
-    // NOTE: Admin/Read endpoints removed as this service no longer has database
-    // access.
-    // They should be handled by the SentimentProcessor or a dedicated query
-    // service.
+   
 }
